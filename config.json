@@ -1,0 +1,25 @@
+{
+    "GUI": {
+        "fps": 60,
+        "mainWindow": {
+            "height": 600,
+            "width": 900
+        },
+        "graphicsWindow": {
+            "height": 1000,
+            "width": 2000
+        }
+    },
+    "renderer": {
+        "size": {
+            "height": 1000,
+            "width": 2000
+        },
+        "bgColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 255
+        }
+    }
+}

@@ -1,0 +1,40 @@
+package config
+
+import "image/color"
+
+type Configuration struct {
+	GUI      GUI      `json:"GUI"`
+	Renderer Renderer `json:"renderer"`
+}
+
+type Window struct {
+	Height float32 `json:"height"`
+	Width  float32 `json:"width"`
+}
+
+type GUI struct {
+	Fps            int    `json:"fps"`
+	MainWindow     Window `json:"mainwindow"`
+	GraphicsWindow Window `json:"graphicsWindow"`
+}
+
+type Renderer struct {
+	Size    Image `json:"size"`
+	BgColor Color `json:"bgColor"`
+}
+
+type Image struct {
+	Height int `json:"height"`
+	Width  int `json:"width"`
+}
+
+type Color struct {
+	R uint8 `json:"r"`
+	G uint8 `json:"g"`
+	B uint8 `json:"b"`
+	A uint8 `json:"a"`
+}
+
+func (c Color) AsRGBA() color.RGBA {
+	return color.RGBA{c.R, c.G, c.B, c.A}
+}
