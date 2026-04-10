@@ -125,7 +125,7 @@ func (s *AudioService) Stop() error {
 	return nil
 }
 
-func (s *AudioService) GetLastSamples() []float32 {
+func (s *AudioService) getLastSamples() []float32 {
 	samples, _ := s.readPCM()
 	if len(samples) > 0 {
 		s.setLastSamples(samples)
@@ -135,7 +135,7 @@ func (s *AudioService) GetLastSamples() []float32 {
 }
 
 func (s *AudioService) GetRingFrequencies(nbRings int) []float64 {
-	samples := s.GetLastSamples()
+	samples := s.getLastSamples()
 	n := len(samples)
 	if n == 0 || nbRings <= 0 {
 		return nil
@@ -154,7 +154,8 @@ func (s *AudioService) GetRingFrequencies(nbRings int) []float64 {
 			real += float64(samples[t]) * math.Cos(angle)
 			imag -= float64(samples[t]) * math.Sin(angle)
 		}
-		result[k] = float64(math.Sqrt(real*real+imag*imag)/float64(n)) * s.config.SampleMultiplier
+		result[k] = float64(math.Sqrt(real*real+imag*imag)/float64(n))
+		result[k] *= s.config.SampleMultiplier
 	}
 
 	return result
