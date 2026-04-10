@@ -37,15 +37,13 @@ func New(config config.Configuration, renderService *render.RenderService, auioS
 	}
 }
 
-func (s *GUIService) Show() {
-	s.window.Show()
-}
-
 func (s *GUIService) Run() {
+	s.startAnimation()
+	s.window.Show()
 	s.fyneApp.Run()
 }
 
-func (s *GUIService) StartAnimation() {
+func (s *GUIService) startAnimation() {
 	ticker := time.NewTicker(time.Second / time.Duration(s.config.GUI.Fps))
 
 	go func() {

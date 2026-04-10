@@ -5,6 +5,7 @@ import "image/color"
 type Configuration struct {
 	GUI      GUI      `json:"GUI"`
 	Renderer Renderer `json:"renderer"`
+	Audio    Audio    `json:"audio"`
 }
 
 type Window struct {
@@ -38,4 +39,8 @@ type Color struct {
 
 func (c Color) AsRGBA() color.RGBA {
 	return color.RGBA{c.R, c.G, c.B, c.A}
+}
+
+type Audio struct {
+	SampleMultiplier float64 `json:"sampleMultiplier"`
 }

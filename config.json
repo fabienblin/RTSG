@@ -22,5 +22,9 @@
             "a": 255
         },
         "lerp": 0.5
+    },
+    "audio": {
+        "sampleMultiplier": 100,
+        "bufferDurationMillisec": 100
     }
 }

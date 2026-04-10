@@ -3,6 +3,7 @@ package audio
 import (
 	"encoding/binary"
 	"fmt"
+	"main/config"
 	"math"
 	"slices"
 	"sync"
@@ -14,6 +15,7 @@ import (
 )
 
 type AudioService struct {
+	config           config.Audio
 	mu               sync.Mutex
 	enumerator       *wca.IMMDeviceEnumerator
 	device           *wca.IMMDevice
@@ -28,18 +30,18 @@ type AudioService struct {
 	stopCh           chan struct{}
 }
 
-func New() *AudioService {
+func New(config config.Audio) *AudioService {
 	return &AudioService{
+		config: config,
 		stopCh: make(chan struct{}),
 	}
 }
-func (a *AudioService) Run() {}
 
-func (a *AudioService) Start() error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+func (s *AudioService) Run() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if a.started {
+	if s.started {
 		return nil
 	}
 
@@ -52,92 +54,88 @@ func (a *AudioService) Start() error {
 		0,
 		wca.CLSCTX_ALL,
 		wca.IID_IMMDeviceEnumerator,
-		&a.enumerator,
+		&s.enumerator,
 	); err != nil {
 		return fmt.Errorf("create device enumerator: %w", err)
 	}
 
-	if err := a.enumerator.GetDefaultAudioEndpoint(wca.ERender, wca.EMultimedia, &a.device); err != nil {
+	if err := s.enumerator.GetDefaultAudioEndpoint(wca.ERender, wca.EMultimedia, &s.device); err != nil {
 		return fmt.Errorf("default audio endpoint: %w", err)
 	}
 
-	if err := a.device.Activate(wca.IID_IAudioClient, wca.CLSCTX_ALL, 0, &a.client); err != nil {
+	if err := s.device.Activate(wca.IID_IAudioClient, wca.CLSCTX_ALL, 0, &s.client); err != nil {
 		return fmt.Errorf("activate audio client: %w", err)
 	}
 
-	if err := a.client.GetMixFormat(&a.format); err != nil {
+	if err := s.client.GetMixFormat(&s.format); err != nil {
 		return fmt.Errorf("get mix format: %w", err)
 	}
 
-	a.sampleRate = int(a.format.NSamplesPerSec)
-	a.channels = int(a.format.NChannels)
+	s.sampleRate = int(s.format.NSamplesPerSec)
+	s.channels = int(s.format.NChannels)
 
-	const bufferDuration = time.Millisecond * 100
-	hns := wca.REFERENCE_TIME(bufferDuration.Nanoseconds() / 100) // convert to 100ns units
-
-	if err := a.client.Initialize(
+	if err := s.client.Initialize(
 		wca.AUDCLNT_SHAREMODE_SHARED,
 		wca.AUDCLNT_STREAMFLAGS_LOOPBACK,
-		hns,
+		wca.REFERENCE_TIME(1000000),
 		0,
-		a.format,
+		s.format,
 		nil,
 	); err != nil {
 		return fmt.Errorf("initialize loopback client: %w", err)
 	}
 
-	if err := a.client.GetService(wca.IID_IAudioCaptureClient, &a.capture); err != nil {
+	if err := s.client.GetService(wca.IID_IAudioCaptureClient, &s.capture); err != nil {
 		return fmt.Errorf("get capture service: %w", err)
 	}
 
-	if err := a.client.Start(); err != nil {
+	if err := s.client.Start(); err != nil {
 		return fmt.Errorf("start client: %w", err)
 	}
 
-	a.started = true
+	s.started = true
 	return nil
 }
 
-func (a *AudioService) Stop() error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+func (s *AudioService) Stop() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if !a.started {
+	if !s.started {
 		return nil
 	}
 
-	_ = a.client.Stop()
+	_ = s.client.Stop()
 
-	if a.capture != nil {
-		a.capture.Release()
+	if s.capture != nil {
+		s.capture.Release()
 	}
-	if a.client != nil {
-		a.client.Release()
+	if s.client != nil {
+		s.client.Release()
 	}
-	if a.device != nil {
-		a.device.Release()
+	if s.device != nil {
+		s.device.Release()
 	}
-	if a.enumerator != nil {
-		a.enumerator.Release()
+	if s.enumerator != nil {
+		s.enumerator.Release()
 	}
 
 	ole.CoUninitialize()
-	a.started = false
+	s.started = false
 	return nil
 }
 
-func (a *AudioService) GetLastSamples() []float32 {
-	samples, _ := a.readPCM()
+func (s *AudioService) GetLastSamples() []float32 {
+	samples, _ := s.readPCM()
 	if len(samples) > 0 {
-		a.setLastSamples(samples)
+		s.setLastSamples(samples)
 	}
 
-	return slices.Clone(a.lastSamples)
+	return slices.Clone(s.lastSamples)
 }
 
-func (a *AudioService) GetRingFrequencies(nbRings int) []float64 {
-	const sampleMultiplier = 100.0
-	samples := a.GetLastSamples()
+func (s *AudioService) GetRingFrequencies(nbRings int) []float64 {
+	samples := s.GetLastSamples()
 	n := len(samples)
 	if n == 0 || nbRings <= 0 {
 		return nil
@@ -156,33 +154,33 @@ func (a *AudioService) GetRingFrequencies(nbRings int) []float64 {
 			real += float64(samples[t]) * math.Cos(angle)
 			imag -= float64(samples[t]) * math.Sin(angle)
 		}
-		result[k] = float64(math.Sqrt(real*real+imag*imag) / float64(n)) * sampleMultiplier
+		result[k] = float64(math.Sqrt(real*real+imag*imag)/float64(n)) * s.config.SampleMultiplier
 	}
 
 	return result
 }
 
-func (a *AudioService) setLastSamples(samples []float32) {
+func (s *AudioService) setLastSamples(samples []float32) {
 	if len(samples) == 0 {
 		return
 	}
 
-	a.lastSamplesMutex.Lock()
-	defer a.lastSamplesMutex.Unlock()
+	s.lastSamplesMutex.Lock()
+	defer s.lastSamplesMutex.Unlock()
 
-	a.lastSamples = slices.Clone(samples)
+	s.lastSamples = slices.Clone(samples)
 }
 
-func (a *AudioService) readPCM() ([]float32, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+func (s *AudioService) readPCM() ([]float32, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if !a.started {
+	if !s.started {
 		return nil, fmt.Errorf("audio service not started")
 	}
 
 	var packetLength uint32
-	if err := a.capture.GetNextPacketSize(&packetLength); err != nil {
+	if err := s.capture.GetNextPacketSize(&packetLength); err != nil {
 		return nil, err
 	}
 
@@ -194,13 +192,13 @@ func (a *AudioService) readPCM() ([]float32, error) {
 	var frames uint32
 	var flags uint32
 
-	if err := a.capture.GetBuffer(&data, &frames, &flags, nil, nil); err != nil {
+	if err := s.capture.GetBuffer(&data, &frames, &flags, nil, nil); err != nil {
 		return nil, err
 	}
-	defer a.capture.ReleaseBuffer(frames)
+	defer s.capture.ReleaseBuffer(frames)
 
-	bytesPerSample := int(a.format.WBitsPerSample / 8)
-	totalSamples := int(frames) * a.channels
+	bytesPerSample := int(s.format.WBitsPerSample / 8)
+	totalSamples := int(frames) * s.channels
 	rawSize := totalSamples * bytesPerSample
 
 	raw := unsafeByteSlice(data, rawSize)
@@ -224,13 +222,11 @@ func (a *AudioService) readPCM() ([]float32, error) {
 	return out, nil
 }
 
-// unsafeByteSlice converts COM buffer memory into a Go byte slice.
-// Replace with a safer helper if you already use unsafe utilities in your codebase.
 func unsafeByteSlice(ptr *byte, length int) []byte {
 	return unsafe.Slice(ptr, length)
 }
 
-func (a *AudioService) SinusoidTestSamples(size int) []float64 {
+func (s *AudioService) SinusoidTestSamples(size int) []float64 {
 	const (
 		speed float64 = math.Pi / 100
 	)
