@@ -19,8 +19,9 @@ type GUI struct {
 }
 
 type Renderer struct {
-	Size    Image `json:"size"`
-	BgColor Color `json:"bgColor"`
+	Size    Image   `json:"size"`
+	BgColor Color   `json:"bgColor"`
+	Lerp    float64 `json:"lerp"`
 }
 
 type Image struct {

@@ -75,8 +75,6 @@ func (s *RenderService) Render(samples []float64) {
 		return
 	}
 
-	const lerpSpeed = 0.15
-
 	for ringIdx, ring := range s.dotRings {
 		if len(ring) == 0 {
 			continue
@@ -85,8 +83,7 @@ func (s *RenderService) Render(samples []float64) {
 		currentDiameter := float64(ring[0].Circle.Size().Width)
 		targetDiameter := 2 * dotRadius * samples[ringIdx]
 
-		lerpedDiameter := currentDiameter +
-			(targetDiameter-currentDiameter)*lerpSpeed
+		lerpedDiameter := currentDiameter + (targetDiameter - currentDiameter) * s.config.Lerp
 
 		newRadius := lerpedDiameter / 2
 
